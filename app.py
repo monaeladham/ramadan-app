@@ -2,105 +2,85 @@ import streamlit as st
 import pandas as pd
 import google.generativeai as genai
 
-# إعداد الـ API
+# 1. إعداد الـ API
 if "api_key" in st.secrets:
     genai.configure(api_key=st.secrets["api_key"])
 else:
     st.error("⚠️ يرجى ضبط الـ api_key في Secrets")
 
-# --- تصميم الواجهة (CSS) لجعلها ملونة وجميلة ---
+# --- تنسيق الواجهة بألوان رمضانية ---
 st.markdown("""
     <style>
-    .main {
-        background-color: #fcf8f0;
-    }
+    .main { background-color: #fdfaf5; }
     .stButton>button {
-        background-color: #2e7d32;
-        color: white;
-        border-radius: 20px;
-        border: None;
-        width: 100%;
-        height: 3em;
-        font-weight: bold;
-        font-size: 20px;
+        background: linear-gradient(to right, #1e5128, #4e944f);
+        color: white; border-radius: 15px; font-size: 20px; font-weight: bold; border: none; padding: 10px;
     }
-    .stButton>button:hover {
-        background-color: #1b5e20;
-        color: #ffca28;
+    .status-card {
+        background-color: #ffffff; padding: 15px; border-radius: 10px;
+        border-right: 5px solid #1e5128; margin-bottom: 10px; box-shadow: 2px 2px 5px rgba(0,0,0,0.1);
     }
-    h1 {
-        color: #1b5e20;
-        text-align: center;
-        font-family: 'Amiri', serif;
-    }
-    .stSelectbox, .stTextInput, .stNumberInput {
-        background-color: #ffffff;
-        border-radius: 10px;
-        border: 1px solid #2e7d32;
-    }
+    h1 { color: #1e5128; text-align: center; }
     </style>
     """, unsafe_allow_html=True)
 
-st.title("🌙 دليل مدبرة رمضان الذكي")
-st.markdown("<h4 style='text-align: center; color: #555;'>نظمي مائدتك بذكاء وصحة لكل العيلة</h4>", unsafe_allow_html=True)
+st.title("🌙 مدبرة رمضان الذكية")
 
 try:
-    # تحميل البيانات
+    # 2. تحميل البيانات (تأكدي أن الأسماء table1.csv وهكذا)
     @st.cache_data
     def load_data():
-        df1 = pd.read_csv("table1.csv")
-        df2 = pd.read_csv("table2.csv")
-        df3 = pd.read_csv("table3.csv")
-        df_m = pd.read_csv("meals.csv")
-        df1.columns = df1.columns.str.strip()
-        return df1, df2, df3, df_m
+        d1 = pd.read_csv("table1.csv")
+        d2 = pd.read_csv("table2.csv")
+        d3 = pd.read_csv("table3.csv")
+        dm = pd.read_csv("meals.csv")
+        d1.columns = d1.columns.str.strip()
+        return d1, d2, d3, dm
 
-    df_health, df_portions, df_alts, df_meals = load_data()
-    
-    st.sidebar.success("✅ الجداول مربوطة")
-    
-    # واجهة إدخال بيانات العائلة
-    with st.container():
-        st.write("### 🏠 بيانات أفراد الأسرة")
-        num_people = st.number_input("كم عدد أفراد الأسرة اليوم؟", min_value=1, value=3)
-        
-        family_data = []
-        for i in range(int(num_people)):
-            col1, col2 = st.columns([1, 2])
-            with col1:
-                name = st.text_input(f"الاسم {i+1}", key=f"n{i}")
-            with col2:
-                status = st.selectbox(f"الحالة الصحية لـ {name if name else i+1}", 
-                                     options=df_health["الحالة الصحية"].unique(), 
-                                     key=f"h{i}")
-            family_data.append({"الاسم": name, "الحالة": status})
+    df_h, df_p, df_a, df_m = load_data()
+    st.sidebar.success("✅ الجداول متصلة")
 
-    st.write("---")
+    # 3. مدخلات المستخدم
+    with st.expander("👤 إعدادات العائلة", expanded=True):
+        num = st.number_input("عدد الأفراد", min_value=1, value=2)
+        family = []
+        for i in range(int(num)):
+            c1, c2 = st.columns(2)
+            with c1: name = st.text_input(f"اسم الفرد {i+1}", key=f"n{i}")
+            with c2: status = st.selectbox(f"الحالة الصحية", options=df_h["الحالة الصحية"].unique(), key=f"h{i}")
+            family.append({"الاسم": name, "الحالة": status})
 
-    # زر التوليد
-    if st.button("🚀 اقترحي لي المنيو والنصائح"):
-        with st.spinner("✨ جاري تحضير منيو رمضاني صحي..."):
-            # استخدام الإصدار الأحدث لتجنب خطأ 404
-            model = genai.GenerativeModel('gemini-1.5-flash-latest')
+    # 4. زر التوليد مع حل مشكلة الـ 404
+    if st.button("🚀 اقترحي لي المنيو"):
+        with st.spinner("✨ جاري الاتصال بالعقل الذكي..."):
+            # محاولة مناداة الموديل بـ 3 طرق مختلفة لحل مشكلة الـ 404
+            model_names = ['gemini-1.5-flash', 'gemini-1.5-flash-latest', 'models/gemini-1.5-flash']
+            success = False
             
-            prompt = f"""
-            بصفتك خبير تغذية، استخدم هذه الجداول:
-            - حالات الصحة: {df_health.to_string()}
-            - حصص الطعام: {df_portions.to_string()}
-            - البدائل: {df_alts.to_string()}
-            - الأكلات: {df_meals.head(25).to_string()}
+            for m_name in model_names:
+                try:
+                    model = genai.GenerativeModel(m_name)
+                    # البرومبت يربط كل جداولك
+                    prompt = f"""
+                    أنت خبير تغذية. بناءً على هذه الجداول:
+                    الخلفية الطبية: {df_h.to_string()}
+                    الحصص والبدائل: {df_p.to_string()}, {df_a.to_string()}
+                    قائمة الأكلات: {df_m.head(20).to_string()}
 
-            المطلوب منيو إفطار وسحور لأسرة: {family_data}
-            1. وجبات تناسب حالة كل فرد.
-            2. لكل فرد: نصيحة من عمود 'المسموح والنصيحة الذهبية' وتنبيه من 'علامات الخطر'.
-            3. اقترح بدائل صحية من جدول البدائل.
-            4. اجعل الأسلوب مبهجاً ورمضانياً ومنظماً في نقاط.
-            """
+                    اقترح منيو إفطار وسحور للأسرة: {family}
+                    ركز على: نصيحة 'المسموح' و'علامات الخطر' من جدول الصحة لكل فرد.
+                    اجعل الرد منظماً جداً بأسماء الأفراد.
+                    """
+                    response = model.generate_content(prompt)
+                    st.markdown("### 📋 المنيو الصحي المقترح:")
+                    st.success(response.text)
+                    success = True
+                    break # لو اشتغل يوقف تجربة الباقي
+                except:
+                    continue
             
-            response = model.generate_content(prompt)
-            st.markdown("### 📋 مقترح مدبرة رمضان لليوم:")
-            st.info(response.text)
+            if not success:
+                st.error("عذراً، جوجل يرفض الاتصال حالياً. تأكدي من صلاحية الـ API Key.")
 
 except Exception as e:
-    st.error(f"⚠️ حدث تنبيه: {e}")
-    st.info("تأكدي من أن الـ API Key مفعل في إعدادات Streamlit Secrets.")
+    st.error(f"خطأ في البيانات: {e}")
