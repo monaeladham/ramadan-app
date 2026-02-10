@@ -2,23 +2,79 @@ import streamlit as st
 import pandas as pd
 import google.generativeai as genai
 
-# إعداد الـ API من الـ Secrets
+# 1. إعداد الـ API Key من الـ Secrets
 if "api_key" in st.secrets:
     genai.configure(api_key=st.secrets["api_key"])
+else:
+    st.error("⚠️ من فضلك ضيفي الـ api_key في إعدادات Secrets على Streamlit Cloud")
 
+st.set_page_config(page_title="مدبرة رمضان الذكية", layout="wide")
 st.title("🌙 دليل مدبرة رمضان الذكي")
+st.subheader("تخطيط وجبات مخصص بناءً على الحالة الصحية لكل فرد")
 
 try:
-    # تحميل الجداول
-    df_health = pd.read_csv("table1.csv")
-    df_meals = pd.read_csv("meals.csv")
+    # 2. تحميل البيانات من الملفات اللي رفعناها
+    @st.cache_data
+    def load_all_data():
+        health_info = pd.read_csv("table1.csv")
+        meals_data = pd.read_csv("meals.csv")
+        return health_info, meals_data
+
+    df_health, df_meals = load_all_data()
+    st.success("✅ تم تحميل جداول الصحة والأكلات بنجاح!")
+
+    # 3. واجهة إدخال عدد الأفراد
+    num_people = st.number_input("كم عدد أفراد الأسرة؟", min_value=1, max_value=20, value=3)
+
+    # 4. واجهة إدخال أسماء الأفراد وحالاتهم الصحية
+    st.write("---")
+    st.write("### بيانات أفراد الأسرة:")
+    family_members = []
     
-    st.success("تم تحميل البيانات بنجاح!")
-    
-    num = st.number_input("عدد الأفراد", min_value=1, value=1)
-    if st.button("توليد الخطة"):
-        model = genai.GenerativeModel('gemini-1.5-flash')
-        response = model.generate_content(f"اقترح وجبة من جدول {df_meals.to_string()} لعدد {num} أفراد")
-        st.markdown(response.text)
+    # عمل تقسيم للشاشة عشان الأسماء تظهر بشكل منظم
+    for i in range(int(num_people)):
+        cols = st.columns(2)
+        with cols[0]:
+            name = st.text_input(f"اسم الفرد {i+1}", key=f"name_{i}", placeholder="مثلاً: محمد")
+        with cols[1]:
+            # هنا بنخلي الاختيارات تيجي مباشرة من عمود 'الحالة' في جدول table1.csv
+            health_status = st.selectbox(
+                f"الحالة الصحية لـ {name if name else f'الفرد {i+1}'}", 
+                options=df_health['الحالة'].unique(),
+                key=f"health_{i}"
+            )
+        family_members.append({"الاسم": name, "الحالة": health_status})
+
+    st.write("---")
+
+    # 5. زر توليد الخطة
+    if st.button("🚀 توليد خطة الوجبات الصحية لليوم"):
+        with st.spinner("جاري تحليل البيانات وتحضير أفضل المنيوهات..."):
+            # تحديد الموديل (تم إصلاح الاسم ليتوافق مع v1beta)
+            model = genai.GenerativeModel('models/gemini-1.5-flash')
+            
+            # تجهيز الطلب (Prompt) اللي هيروح للذكاء الاصطناعي
+            prompt = f"""
+            أنت خبير تغذية رمضاني. بناءً على الجداول التالية:
+            1. جدول الحالات الصحية: {df_health.to_string()}
+            2. جدول الأكلات المتاحة: {df_meals.head(20).to_string()}
+            
+            المطلوب: اقتراح وجبة إفطار وسحور للأسرة المكونة من {num_people} أفراد وهم:
+            {family_members}
+            
+            يجب مراعاة:
+            - أن تناسب الوجبات الحالة الصحية لكل فرد المذكورة أمام اسمه.
+            - ذكر نصيحة سريعة لكل فرد بناءً على حالته الصحية المذكورة في جدول الصحة.
+            - حساب الكميات التقريبية بناءً على عدد الأفراد.
+            - أن يكون الأسلوب مشجعاً ورمضانياً.
+            """
+            
+            response = model.generate_content(prompt)
+            
+            # عرض النتيجة
+            st.markdown("### 📋 مقترح الوجبات والنصائح الصحية:")
+            st.write(response.text)
+
 except Exception as e:
-    st.error(f"تأكد من وجود الملفات في GitHub: {e}")
+    st.error(f"❌ حدث خطأ: {e}")
+    st.info("تأكدي أن ملفات table1.csv و meals.csv موجودة في GitHub بنفس الحروف الصغيرة.")
